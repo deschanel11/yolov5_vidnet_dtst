@@ -33,6 +33,8 @@ from pathlib import Path
 import torch
 import torch.backends.cudnn as cudnn
 
+import numpy as np
+
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
 if str(ROOT) not in sys.path:
@@ -60,7 +62,8 @@ def run(
         view_img=False,  # show results
         save_txt=False,  # save results to *.txt
         save_conf=False,  # save confidences in --save-txt labels
-        save_crop=False,  # save cropped prediction boxes
+        #save_crop=False,  # save cropped prediction boxes
+        save_crop = True,
         nosave=False,  # do not save images/videos
         classes=None,  # filter by class: --class 0, or --class 0 2 3
         agnostic_nms=False,  # class-agnostic NMS
@@ -110,16 +113,22 @@ def run(
     seen, windows, dt = 0, [], (Profile(), Profile(), Profile())
     for path, im, im0s, vid_cap, s in dataset:
         with dt[0]:
+            print("dt[0] : ", dt[0])
             im = torch.from_numpy(im).to(device)
+            print("im 1 : ", im)
             im = im.half() if model.fp16 else im.float()  # uint8 to fp16/32
+            print("im 2 : ", im)
             im /= 255  # 0 - 255 to 0.0 - 1.0
+            print("im 3 : ", im)
             if len(im.shape) == 3:
                 im = im[None]  # expand for batch dim
 
         # Inference
         with dt[1]:
             visualize = increment_path(save_dir / Path(path).stem, mkdir=True) if visualize else False
+            print("visualize : ", visualize)
             pred = model(im, augment=augment, visualize=visualize)
+            print("pred : ", pred)
 
         # NMS
         with dt[2]:
@@ -137,13 +146,26 @@ def run(
             else:
                 p, im0, frame = path, im0s.copy(), getattr(dataset, 'frame', 0)
 
+            print("original p : ", p)
             p = Path(p)  # to Path
+            print("p : ", p)
+
+
             save_path = str(save_dir / p.name)  # im.jpg
+
+            print("p.name은 뭐지?? : ", p.name)
+
             txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset.mode == 'image' else f'_{frame}')  # im.txt
             s += '%gx%g ' % im.shape[2:]  # print string
+            print("s는 string? : ", s)
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
+
+            save_crop = True
+
             imc = im0.copy() if save_crop else im0  # for save_crop
+            print("imc : ", imc)
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
+            print("len(det) : ", len(det))
             if len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(im.shape[2:], det[:, :4], im0.shape).round()
@@ -152,11 +174,41 @@ def run(
                 for c in det[:, -1].unique():
                     n = (det[:, -1] == c).sum()  # detections per class
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+                    print("Print results 부분 s : ", s)
+
+
+                print("save_crop : ", save_crop)
 
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
+                    print("xyxy : ", xyxy)
+
+                    tmp_xyxy = xywh.clone() if isinstance(xyxy, torch.Tensor) else np.copy(xyxy)
+                    # xyxy[:, 0] = (tmp_xyxy[:, 0] + tmp_xyxy[:, 2]) / 2 - 128  # x1
+                    # xyxy[:, 1] = (tmp_xyxy[:, 1] + tmp_xyxy[:, 3]) / 2 + 128  # y1
+                    # xyxy[:, 2] = (tmp_xyxy[:, 0] + tmp_xyxy[:, 2]) / 2 + 128  # x2
+                    # xyxy[:, 3] = (tmp_xyxy[:, 1] + tmp_xyxy[:, 3]) / 2 - 128  # y2
+
+                    # xyxy[0] = ((tmp_xyxy[0] + tmp_xyxy[2]) / 2) - 128  # x1
+                    # xyxy[1] = ((tmp_xyxy[1] + tmp_xyxy[3]) / 2) + 128  # y1
+                    # xyxy[2] = ((tmp_xyxy[0] + tmp_xyxy[2]) / 2) + 128  # x2
+                    # xyxy[3] = ((tmp_xyxy[1] + tmp_xyxy[3]) / 2) - 128  # y2
+
+                    resolution = 512
+                    adder = resolution/2
+
+                    xyxy[0] = ((tmp_xyxy[0] + tmp_xyxy[2]) / 2) - adder  # x1
+                    xyxy[1] = ((tmp_xyxy[1] + tmp_xyxy[3]) / 2) - adder  # y1
+                    xyxy[2] = ((tmp_xyxy[0] + tmp_xyxy[2]) / 2) + adder  # x2
+                    xyxy[3] = ((tmp_xyxy[1] + tmp_xyxy[3]) / 2) + adder  # y2
+
+                    print("xyxy : ", xyxy)
+
+
                     if save_txt:  # Write to file
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
+                        print("xywh :", xywh)
+
                         line = (cls, *xywh, conf) if save_conf else (cls, *xywh)  # label format
                         with open(f'{txt_path}.txt', 'a') as f:
                             f.write(('%g ' * len(line)).rstrip() % line + '\n')
@@ -167,6 +219,7 @@ def run(
                         annotator.box_label(xyxy, label, color=colors(c, True))
                     if save_crop:
                         save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
+                        print("save_dir : ", save_dir)
 
             # Stream results
             im0 = annotator.result()
@@ -178,19 +231,32 @@ def run(
                 cv2.imshow(str(p), im0)
                 cv2.waitKey(1)  # 1 millisecond
 
+
+            print("save_img는 true인가??? : ", save_img)
+
             # Save results (image with detections)
             if save_img:
                 if dataset.mode == 'image':
                     cv2.imwrite(save_path, im0)
                 else:  # 'video' or 'stream'
                     if vid_path[i] != save_path:  # new video
+
+                        print("vid_path[i] : ", vid_path[i])
+                        print("save_path : ", save_path)
+
                         vid_path[i] = save_path
                         if isinstance(vid_writer[i], cv2.VideoWriter):
                             vid_writer[i].release()  # release previous video writer
                         if vid_cap:  # video
                             fps = vid_cap.get(cv2.CAP_PROP_FPS)
+                            print("fps : ", cv2.CAP_PROP_FPS)
                             w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                             h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+                            # w = 256
+                            # h = 256
+
+                            print("w, h : ", w, h)
                         else:  # stream
                             fps, w, h = 30, im0.shape[1], im0.shape[0]
                         save_path = str(Path(save_path).with_suffix('.mp4'))  # force *.mp4 suffix on results videos
