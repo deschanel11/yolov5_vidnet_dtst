@@ -113,22 +113,22 @@ def run(
     seen, windows, dt = 0, [], (Profile(), Profile(), Profile())
     for path, im, im0s, vid_cap, s in dataset:
         with dt[0]:
-            print("dt[0] : ", dt[0])
+            #print("dt[0] : ", dt[0])
             im = torch.from_numpy(im).to(device)
-            print("im 1 : ", im)
+            #print("im 1 : ", im)
             im = im.half() if model.fp16 else im.float()  # uint8 to fp16/32
-            print("im 2 : ", im)
+            #print("im 2 : ", im)
             im /= 255  # 0 - 255 to 0.0 - 1.0
-            print("im 3 : ", im)
+            #print("im 3 : ", im)
             if len(im.shape) == 3:
                 im = im[None]  # expand for batch dim
 
         # Inference
         with dt[1]:
             visualize = increment_path(save_dir / Path(path).stem, mkdir=True) if visualize else False
-            print("visualize : ", visualize)
+            #print("visualize : ", visualize)
             pred = model(im, augment=augment, visualize=visualize)
-            print("pred : ", pred)
+            #print("pred : ", pred)
 
         # NMS
         with dt[2]:
@@ -146,24 +146,24 @@ def run(
             else:
                 p, im0, frame = path, im0s.copy(), getattr(dataset, 'frame', 0)
 
-            print("original p : ", p)
+            #print("original p : ", p)
             p = Path(p)  # to Path
-            print("p : ", p)
+            #print("p : ", p)
 
 
             save_path = str(save_dir / p.name)  # im.jpg
 
-            print("p.name은 뭐지?? : ", p.name)
+            #print("p.name은 뭐지?? : ", p.name)
 
             txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset.mode == 'image' else f'_{frame}')  # im.txt
             s += '%gx%g ' % im.shape[2:]  # print string
-            print("s는 string? : ", s)
+            #print("s는 string? : ", s)
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
 
             save_crop = True
 
             imc = im0.copy() if save_crop else im0  # for save_crop
-            print("imc : ", imc)
+            #print("imc : ", imc)
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
             print("len(det) : ", len(det))
             if len(det):
@@ -174,14 +174,14 @@ def run(
                 for c in det[:, -1].unique():
                     n = (det[:, -1] == c).sum()  # detections per class
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
-                    print("Print results 부분 s : ", s)
+                    #print("Print results 부분 s : ", s)
 
 
-                print("save_crop : ", save_crop)
+                #print("save_crop : ", save_crop)
 
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
-                    print("xyxy : ", xyxy)
+                    #print("xyxy : ", xyxy)
 
                     tmp_xyxy = xywh.clone() if isinstance(xyxy, torch.Tensor) else np.copy(xyxy)
                     # xyxy[:, 0] = (tmp_xyxy[:, 0] + tmp_xyxy[:, 2]) / 2 - 128  # x1
@@ -202,12 +202,15 @@ def run(
                     xyxy[2] = ((tmp_xyxy[0] + tmp_xyxy[2]) / 2) + adder  # x2
                     xyxy[3] = ((tmp_xyxy[1] + tmp_xyxy[3]) / 2) + adder  # y2
 
-                    print("xyxy : ", xyxy)
+                    print("xyxy[2] - xyxy[0] : ", xyxy[2] - xyxy[0])
+                    print("xyxy[3] - xyxy[1] : ", xyxy[3] - xyxy[1])
+
+                    #print("xyxy : ", xyxy)
 
 
                     if save_txt:  # Write to file
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
-                        print("xywh :", xywh)
+                        #print("xywh :", xywh)
 
                         line = (cls, *xywh, conf) if save_conf else (cls, *xywh)  # label format
                         with open(f'{txt_path}.txt', 'a') as f:
@@ -232,7 +235,7 @@ def run(
                 cv2.waitKey(1)  # 1 millisecond
 
 
-            print("save_img는 true인가??? : ", save_img)
+            #print("save_img는 true인가??? : ", save_img)
 
             # Save results (image with detections)
             if save_img:
